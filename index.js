@@ -15,35 +15,44 @@ const Ws = w3cwebsocket;
 module.exports = class AWSWebsocketProvider extends WebsocketProvider {
   constructor(url, options) {
     super(url, options)
-  } 
+  }
 
   connect() {
-    const region = process.env.AWS_DEFAULT_REGION || 'us-east-1';
-    const creds =
-      'clientConfig' in this &&
-      this.clientConfig !== undefined &&
-      'credentials' in this.clientConfig &&
-      'accessKeyId' in this.clientConfig.credentials &&
-      'secretAccessKey' in this.clientConfig.credentials &&
-      this.clientConfig.credentials;
-    const credentials = (creds && new AWS.Credentials(creds)) || new AWS.EnvironmentCredentials('AWS');
-    const host = new URL(this.url).hostname;
-    const endpoint = new AWS.Endpoint(`https://${host}/`);
-    const req = new AWS.HttpRequest(endpoint, region);
-    req.method = 'GET';
-    req.body = '';
-    req.headers['host'] = host;
-    const signer = new AWS.Signers.V4(req, 'managedblockchain');
-    signer.addAuthorization(credentials, new Date());
-    let headers = {
-      'Authorization': req.headers['Authorization'],
-      'X-Amz-Date': req.headers['X-Amz-Date'],
-      ...this.headers
-    }
-    if (process.env.AWS_SESSION_TOKEN) {
-      headers = { ...headers, 'X-Amz-Security-Token': process.env.AWS_SESSION_TOKEN };
-    }
-    this.connection = new Ws(this.url, this.protocol, undefined, headers, this.requestOptions, this.clientConfig);
-    this._addSocketListeners();
+    AWS.config.credentialProvider.resolve((err, credentials) => {
+      if (err) {
+        callback(`[aws-ethjs-provider-http] CONNECTION ERROR: Couldn't connect to node '${self.host}': missing AWS credentials. Check your environment variables using command 'echo $NODE_ENV' to verify credentials are set. ${err.message}`)
+        return;
+      }
+      const region = process.env.AWS_DEFAULT_REGION || 'us-east-1';
+      if (!credentials) {
+        const creds =
+          'clientConfig' in this &&
+          this.clientConfig !== undefined &&
+          'credentials' in this.clientConfig &&
+          'accessKeyId' in this.clientConfig.credentials &&
+          'secretAccessKey' in this.clientConfig.credentials &&
+          this.clientConfig.credentials;
+        credentials = credentials || (creds && new AWS.Credentials(creds)) || new AWS.EnvironmentCredentials('AWS');
+      }
+
+      const host = new URL(this.url).hostname;
+      const endpoint = new AWS.Endpoint(`https://${host}/`);
+      const req = new AWS.HttpRequest(endpoint, region);
+      req.method = 'GET';
+      req.body = '';
+      req.headers['host'] = host;
+      const signer = new AWS.Signers.V4(req, 'managedblockchain');
+      signer.addAuthorization(credentials, new Date());
+      let headers = {
+        'Authorization': req.headers['Authorization'],
+        'X-Amz-Date': req.headers['X-Amz-Date'],
+        ...this.headers
+      }
+      if (process.env.AWS_SESSION_TOKEN) {
+        headers = { ...headers, 'X-Amz-Security-Token': process.env.AWS_SESSION_TOKEN };
+      }
+      this.connection = new Ws(this.url, this.protocol, undefined, headers, this.requestOptions, this.clientConfig);
+      this._addSocketListeners();
+    });
   }
 }
