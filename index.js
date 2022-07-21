@@ -18,7 +18,6 @@ module.exports = class AWSWebsocketProvider extends WebsocketProvider {
   } 
 
   connect() {
-    const configCreds = AWS.config.credentials;
     const region = process.env.AWS_DEFAULT_REGION || 'us-east-1';
     const creds =
       'clientConfig' in this &&
@@ -27,7 +26,7 @@ module.exports = class AWSWebsocketProvider extends WebsocketProvider {
       'accessKeyId' in this.clientConfig.credentials &&
       'secretAccessKey' in this.clientConfig.credentials &&
       this.clientConfig.credentials;
-    const credentials = configCreds || (creds && new AWS.Credentials(creds)) || new AWS.EnvironmentCredentials('AWS');
+    const credentials = (creds && new AWS.Credentials(creds));
     const host = new URL(this.url).hostname;
     const endpoint = new AWS.Endpoint(`https://${host}/`);
     const req = new AWS.HttpRequest(endpoint, region);
@@ -41,8 +40,8 @@ module.exports = class AWSWebsocketProvider extends WebsocketProvider {
       'X-Amz-Date': req.headers['X-Amz-Date'],
       ...this.headers
     }
-    if (process.env.AWS_SESSION_TOKEN) {
-      headers = { ...headers, 'X-Amz-Security-Token': process.env.AWS_SESSION_TOKEN };
+    if (process.env.AWS_SESSION_TOKEN || credentials.sessionToken) {
+      headers = { ...headers, 'X-Amz-Security-Token': process.env.AWS_SESSION_TOKEN || credentials.sessionToken };
     }
     this.connection = new Ws(this.url, this.protocol, undefined, headers, this.requestOptions, this.clientConfig);
     this._addSocketListeners();
